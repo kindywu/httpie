@@ -2,6 +2,12 @@ use anyhow::Result;
 use colored::Colorize;
 use mime::Mime;
 use reqwest::{header, Response};
+use syntect::{
+    easy::HighlightLines,
+    highlighting::{Style, ThemeSet},
+    parsing::SyntaxSet,
+    util::{as_24_bit_terminal_escaped, LinesWithEndings},
+};
 
 pub async fn print_resp(resp: Response) -> Result<()> {
     print_status(&resp);
@@ -32,7 +38,29 @@ pub fn print_body(m: Option<Mime>, body: &String) {
         Some(v) if v == mime::APPLICATION_JSON => {
             println!("{}", jsonxf::pretty_print(body).unwrap().cyan())
         }
+        Some(v) if v == mime::TEXT_HTML || v == mime::TEXT_HTML_UTF_8 => {
+            print_html(body);
+            println!()
+        }
         // 其它 mime type，我们就直接输出
         _ => println!("{}", body),
+    };
+}
+
+fn print_html(html: &str) {
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+
+    // let syntax = ps.find_syntax_by_extension("rs").unwrap();
+    // let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
+    // let s = "pub struct Wow { hi: u64 }\nfn blah() -> u64 {}";
+
+    let syntax = ps.find_syntax_by_extension("html").unwrap();
+    let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
+
+    for line in LinesWithEndings::from(html) {
+        let ranges: Vec<(Style, &str)> = h.highlight_line(line, &ps).unwrap();
+        let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
+        print!("{}", escaped);
     }
 }
